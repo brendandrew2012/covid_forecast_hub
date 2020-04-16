@@ -1,6 +1,0 @@
-team_name: CU
-team_abbr: CU
-model_name: nointerv
-model_abbr: nointerv
-model_contributors: example
-methods: ""
