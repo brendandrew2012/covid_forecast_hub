@@ -1,10 +1,10 @@
-## CU incident death data functions
+## CU death data functions
 ## Johannes Bracher
 ## April 2020
 
 #' turn CU forecast file into quantile-based format
 #'
-#' @param cu_filepath path to a cu submission file
+#' @param cu_filepath path to a CU submission file
 #' @param file the name of the file (CU forecast files are state_cdchosp_60contact.csv,
 #' state_cdchosp_70contact.csv, state_cdchosp_80contact.csv, state_cdchosp_nointerv.csv)
 #' @param timezero the origin date for the forecast
@@ -118,6 +118,8 @@ process_cu_file <- function(cu_filepath, file, timezero) {
   dat_quantiles$location <- as.character(dat_quantiles$location)
   dat_quantiles$location[nchar(dat_quantiles$location) == 1] <-
     paste0("0", dat_quantiles$location[nchar(dat_quantiles$location) == 1])
+  # format location_names:
+  dat_quantiles$location_name[dat_quantiles$location_name == "US National"] <- "US"
   rownames(dat_quantiles) <- NULL
 
   return(dat_quantiles)
