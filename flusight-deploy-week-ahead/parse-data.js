@@ -40,6 +40,9 @@ const parseCSVInfo = (fileName) => {
   let mdate = new mmwr.MMWRDate(2016, 48)
   mdate.fromMomentDate(moment(epiDate))
   let epiweek = mdate.week // shift data by 1
+  if (mdate.day > 2) { // forecast is on a Tuesday - Saturday
+    epiweek = epiweek + 1;
+  }
   // Week >=30 of year X are in season {X}-{X+1}
   // Week <30 of year Y are in season {Y-1}-{Y}
   return {
