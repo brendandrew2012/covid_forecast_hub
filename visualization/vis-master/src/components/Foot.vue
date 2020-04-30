@@ -26,10 +26,12 @@
 
 
 
+
 <<<<<<< HEAD
 <<<<<<< HEAD
 =======
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 >>>>>>> e13e1665f0e12c541b77db7b2688ca3c8be45b70
 =======
@@ -39,6 +41,9 @@
 =======
 
 >>>>>>> 0f3129ee95f5202012e1e8ca472a46df920173e1
+=======
+
+>>>>>>> 0db2a9dad2a2cf5cabf14e657273c3ac715c19e3
 <style lang="scss" scoped>
 .footer {
   padding: 10px 20px !important;
