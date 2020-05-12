@@ -10,5 +10,5 @@ covid19-forecast-hub.Rproj
 
 .vscode
 packrat/lib*/
-
-visualization
+visualization/
+data-processed/
