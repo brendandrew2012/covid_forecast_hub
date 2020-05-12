@@ -2,10 +2,29 @@
 
 # Provides a shiny dashboard to explore the processed data
 
+library("tidyverse")
 library("shiny")
+library("DT")
 library("rmarkdown")
 
+options(DT.options = list(pageLength = 25))
+
+source("../code/processing-fxns/get_next_saturday.R")
 source("read_processed_data.R")
+
+# Get truth 
+truth = bind_rows(
+  read_csv("../data-truth/truth-Incident Deaths.csv") %>% mutate(inc_cum = "inc"),
+  read_csv("../data-truth/truth-Cumulative Deaths.csv") %>% mutate(inc_cum = "cum")
+) %>%
+  rename(fips_numeric = location) %>%
+  left_join(read_csv("../template/state_fips_codes.csv") %>%
+              rename(fips_alpha = state,
+                     fips_numeric = state_code), by = c("fips_numeric")) %>%
+  mutate(fips_alpha = ifelse(fips_numeric == "US", "US", fips_alpha))
+
+
+
 
 # Further process the processed data for ease of exploration
 latest <- all_data %>% 
@@ -21,7 +40,15 @@ latest_locations <- latest %>%
   dplyr::summarize(US = ifelse(any(fips_alpha == "US"), "Yes", "-"),
                    n_states = sum(state.abb %in% fips_alpha),
                    other = paste(unique(setdiff(fips_alpha, c(state.abb,"US"))),
-                                 collapse = " "))
+                                 collapse = " "),
+                   missing_states = paste(unique(setdiff(state.abb, fips_alpha)),
+                                          collapse = " "),
+                   missing_states = ifelse(missing_states == paste(state.abb, collapse = " "), 
+                                           "all", missing_states),
+                   missing_states = ifelse(nchar(missing_states) > 7, 
+                                           "...lots...", missing_states)
+                   )
+
 
 latest_targets <- latest %>%
   dplyr::group_by(team, model, forecast_date, type, unit, ahead, inc_cum, death_cases) %>%
@@ -53,6 +80,62 @@ latest_quantiles_summary <- latest_quantiles %>%
     any_min  = ifelse(any(min),  "Yes", "-")
   )
 
+offset <- 0 # currently 7 for testing, but should be 0
+ensemble_data <- latest %>%
+  filter(forecast_date > get_next_saturday(Sys.Date())-offset-9)
+  # filter( (target_end_date == get_next_saturday(Sys.Date()-offset) & grepl("1 wk", target)) |
+  #           (target_end_date == get_next_saturday(Sys.Date()+ 7-offset) & grepl("2 wk", target))|
+  #           (target_end_date == get_next_saturday(Sys.Date()+14-offset) & grepl("3 wk", target))|
+  #           (target_end_date == get_next_saturday(Sys.Date()+21-offset) & grepl("4 wk", target)))
+
+
+ensemble <- ensemble_data %>%
+  group_by(team, model, forecast_date) %>%
+  filter(model != "ensemble", 
+         unit == "wk",
+         type == "quantile",
+         death_cases == "death") %>%
+  dplyr::summarize(
+    median    = ifelse(any(quantile == 0.5, na.rm = TRUE), "Yes", "-"),
+    cum_death = ifelse(all(paste(1:4, "wk ahead cum death") %in% target), "Yes", "-"),
+    inc_death = ifelse(all(paste(1:4, "wk ahead inc death") %in% target), "Yes", "-"),
+    all_weeks = ifelse(all(1:4 %in% n_unit), "Yes", "-"),
+    has_US    = ifelse("US" %in% fips_alpha, "Yes", "-"),
+    has_states = ifelse(all(state.abb %in% fips_alpha), "Yes", "-")
+  )
+
+ensemble_quantiles <- ensemble_data %>%
+  filter(model != "ensemble", !is.na(quantile)) %>%
+  select(team, model, forecast_date, quantile) %>%
+  unique() %>%
+  mutate(yes = "Yes",
+         quantile = as.character(quantile)) 
+
+g_ensemble_quantiles <- ggplot(ensemble_quantiles %>%
+                                 mutate(team_model = paste(team,model,sep="-")), 
+                               aes(x = quantile, y = team_model, fill = yes)) +
+  geom_tile() +
+  theme_bw() + 
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+###############################################################################
+# Create shiny latest plot
+latest_plot_data <- latest %>%
+  filter(quantile %in% c(.025,.25,.5,.75,.975) | type == "point") %>%
+  
+  mutate(quantile = ifelse(type == "point", "point", quantile),
+         simple_target = paste(unit,ahead,inc_cum, death_cases)) %>%
+  select(-type) %>%
+  tidyr::pivot_wider(
+    names_from = quantile,
+    values_from = value
+  )
+
+
+
 
 
 
@@ -77,8 +160,27 @@ ui <- navbarPage(
            h3("Quantiles by target"),
            DT::DTOutput("latest_quantiles")),
   
+  tabPanel("Ensemble",           
+           DT::DTOutput("ensemble"),
+           # DT::DTOutput("ensemble_quantiles"),
+           plotOutput("ensemble_quantile_plot")),
+  
   tabPanel("Latest",           
            DT::DTOutput("latest")),
+  
+  tabPanel("Latest Viz",
+           sidebarLayout(
+             sidebarPanel(
+               selectInput("team",         "Team", sort(unique(latest_plot_data$team         )), "IHME"),
+               selectInput("model",       "Model", sort(unique(latest_plot_data$model        ))),
+               selectInput("target",     "Target", sort(unique(latest_plot_data$simple_target))),
+               selectInput("location", "Location", sort(unique(latest_plot_data$fips_alpha   )))
+             ), 
+             mainPanel(
+               plotOutput("latest_plot")
+             )
+           )
+           ),
   
   tabPanel("All",              
            DT::DTOutput("all_data")),
@@ -95,19 +197,75 @@ ui <- navbarPage(
            )
 )
 
+
 # Define server logic required to draw a histogram
-server <- function(input, output) {
+server <- function(input, output, session) {
   
   output$latest_targets   <- DT::renderDT(latest_targets,   filter = "top")
   output$latest_locations <- DT::renderDT(latest_locations, filter = "top")
   output$latest_quantiles <- DT::renderDT(latest_quantiles, filter = "top")
   output$latest_quantiles_summary <- DT::renderDT(latest_quantiles_summary, filter = "top")
+  
+  output$ensemble         <- DT::renderDT(ensemble,         filter = "top")
+  # output$ensemble_quantiles        <- DT::renderDT(ensemble_quantiles,         filter = "top")
+  output$ensemble_quantile_plot <- shiny::renderPlot(g_ensemble_quantiles)
+  
   output$latest           <- DT::renderDT(latest,           filter = "top")
+  
+  #############################################################################
+  # Latest viz: Filter data based on user input
+  
+  latest_t    <- reactive({ latest_plot_data %>% filter(team          == input$team) })
+  latest_tm   <- reactive({ latest_t()       %>% filter(model         == input$model) })
+  latest_tmt  <- reactive({ latest_tm()      %>% filter(simple_target == input$target) })
+  latest_tmtl <- reactive({ latest_tmt()     %>% filter(fips_alpha    == input$location) })
+  
+  truth_plot <- reactive({ 
+    truth %>% 
+      filter(fips_alpha == input$location,
+             inc_cum == ifelse(grepl("inc", input$target), "inc", "cum"))
+  })
+  
+  observe({
+    models <- sort(unique(latest_t()$model))
+    updateSelectInput(session, "model", choices = models, selected = models[1])
+  })
+  
+  observe({
+    targets <- sort(unique(latest_tm()$simple_target))
+    updateSelectInput(session, "target", choices = targets, selected = targets[1])
+  })
+  
+  observe({
+    locations <- sort(unique(latest_tmt()$fips_alpha))
+    updateSelectInput(session, "location", choices = locations, 
+                      selected = ifelse(any("US" == locations), "US", locations[1]))
+  })
+  
+  output$latest_plot      <- shiny::renderPlot({
+    d    <- latest_tmtl()
+    team <- unique(d$team)
+    model <- unique(d$model)
+    forecast_date <- unique(d$forecast_date)
+    
+    ggplot(d, aes(x = target_end_date)) + 
+      geom_ribbon(aes(ymin = `0.025`, ymax = `0.975`, fill = "95%")) +
+      geom_ribbon(aes(ymin = `0.25`, ymax = `0.75`, fill = "50%")) +
+      scale_fill_manual(name = "", values = c("95%" = "lightgray", "50%" = "gray")) +
+      
+      geom_point(aes(y=`0.5`, color = "median")) + geom_line( aes(y=`0.5`, color = "median")) + 
+      geom_point(aes(y=point, color = "point")) + geom_line( aes(y=point, color = "point")) + 
+      scale_color_manual(name = "", values = c("median" = "slategray", "point" = "black")) +
+      
+      geom_line(data = truth_plot(), aes(x = date, y = value), color = "green") + 
+      
+      labs(y="value", title = forecast_date) +
+      theme_bw() +
+      theme(plot.title = element_text(color = ifelse(Sys.Date() - forecast_date > 6, "red", "black")))
+  })
   
   output$all_data         <- DT::renderDT(all_data,         filter = "top")
 }
 
 # Run the application 
 shinyApp(ui = ui, server = server)
-
-
