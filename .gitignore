@@ -11,8 +11,4 @@ covid19-forecast-hub.Rproj
 .vscode
 packrat/lib*/
 
-# To make sure the repo doesn't get too big
 visualization
-# data-processed
-data-raw
-data-truth
