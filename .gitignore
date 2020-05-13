@@ -7,6 +7,7 @@
 node_modules
 visualization/data
 visualization/vis-master/data
+visualization/vis-master/src
 .ipynb_checkpoints
 covid19-forecast-hub.Rproj
 
