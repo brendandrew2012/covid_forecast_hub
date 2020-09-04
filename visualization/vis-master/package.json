@@ -37,7 +37,7 @@
     "js-yaml": "^3.13.1",
     "moize": "^4.0.4",
     "nprogress": "^0.2.0",
-    "papaparse": "^4.1.2",
+    "papaparse": "^5.2.0",
     "progress": "^1.1.8",
     "stringstream": "^1.0.0",
     "tablesort": "^5.0.1",
