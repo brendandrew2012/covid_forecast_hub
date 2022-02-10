@@ -15,7 +15,7 @@
     "js-yaml": "^3.13.1",
     "mocha": "^5.2.0",
     "nan": "^2.11.1",
-    "node-sass": "^4.9.4",
+    "node-sass": "^7.0.0",
     "papaparse": "^4.6.1",
     "wildcard": "^2.0.0"
   },
