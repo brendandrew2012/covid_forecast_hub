@@ -11,7 +11,7 @@
   "dependencies": {
     "array-equal": "^1.0.0",
     "chai": "^4.1.1",
-    "d3": "^4.10.2",
+    "d3": "^7.6.1",
     "deep-rename-keys": "^0.2.1",
     "js-yaml": "^3.13.1",
     "mmwr-week": "^1.1.0",
